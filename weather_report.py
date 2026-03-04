@@ -1,17 +1,15 @@
-# 安装依赖 pip3 install requests html5lib bs4 schedule
 import os
 import time
 import requests
 import json
 from bs4 import BeautifulSoup
+import sendNotify
 
 
-appID = os.environ.get("APP_ID")
-appSecret = os.environ.get("APP_SECRET")
-# 收信人ID即 用户列表中的微信号
-openId = os.environ.get("OPEN_ID")
 # 天气预报模板ID
 weather_template_id = os.environ.get("TEMPLATE_ID")
+# 课表模板ID
+timetable_template_id = os.environ.get("TIMETABLE_TEMPLATE_ID")
 
 def get_weather(my_city):
     urls = ["http://www.weather.com.cn/textFC/hb.shtml",
@@ -59,16 +57,6 @@ def get_weather(my_city):
                     return this_city, temp, weather_typ, wind
 
 
-def get_access_token():
-    # 获取access token的url
-    url = 'https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid={}&secret={}' \
-        .format(appID.strip(), appSecret.strip())
-    response = requests.get(url).json()
-    print(response)
-    access_token = response.get('access_token')
-    return access_token
-
-
 def get_daily_love():
     # 每日一句情话
     url = "https://api.lovelive.tools/api/SweetNothings/Serialization/Json"
@@ -79,7 +67,7 @@ def get_daily_love():
     return daily_love
 
 
-def send_weather(access_token, weather):
+def send_weather(weather):
     # touser 就是 openID
     # template_id 就是模板ID
     # url 就是点击模板跳转的url
@@ -89,65 +77,57 @@ def send_weather(access_token, weather):
     today = datetime.date.today()
     today_str = today.strftime("%Y年%m月%d日")
 
-    body = {
-        "touser": openId.strip(),
-        "template_id": weather_template_id.strip(),
-        "url": "https://weixin.qq.com",
-        "data": {
-            "date": {
-                "value": today_str
-            },
-            "region": {
-                "value": weather[0]
-            },
-            "weather": {
-                "value": weather[2]
-            },
-            "temp": {
-                "value": weather[1]
-            },
-            "wind_dir": {
-                "value": weather[3]
-            },
-            "today_note": {
-                "value": get_daily_love()
-            }
+    data = {
+        "date": {
+            "value": today_str
+        },
+        "region": {
+            "value": weather[0]
+        },
+        "weather": {
+            "value": weather[2]
+        },
+        "temp": {
+            "value": weather[1]
+        },
+        "wind_dir": {
+            "value": weather[3]
+        },
+        "today_note": {
+            "value": get_daily_love()
         }
     }
-    url = 'https://api.weixin.qq.com/cgi-bin/message/template/send?access_token={}'.format(access_token)
-    print(requests.post(url, json.dumps(body)).text)
+    
+    sendNotify.send_template_message(weather_template_id, data)
 
 
-def send_timetable(access_token, message):
-    body = {
-        "touser": openId,
-        "template_id": timetable_template_id.strip(),
-        "url": "https://weixin.qq.com",
-        "data": {
-            "message": {
-                "value": message
-            },
-        }
+def send_timetable(message):
+    if not timetable_template_id:
+        print("Error: TIMETABLE_TEMPLATE_ID not set.")
+        return
+
+    data = {
+        "message": {
+            "value": message
+        },
     }
-    url = 'https://api.weixin.qq.com/cgi-bin/message/template/send?access_token={}'.format(access_token)
-    print(requests.post(url, json.dumps(body)).text)
+    sendNotify.send_template_message(timetable_template_id, data)
 
 
 def weather_report(city):
-    # 1.获取access_token
-    access_token = get_access_token()
-    # 2. 获取天气
+    # 1. 获取天气
     weather = get_weather(city)
+    if not weather:
+        print(f"无法获取到 {city} 的天气信息")
+        return
     print(f"天气信息： {weather}")
-    # 3. 发送消息
-    send_weather(access_token, weather)
+    # 2. 发送消息
+    send_weather(weather)
 
 
 def timetable(message):
-    # 1.获取access_token
-    access_token = get_access_token()
-    # 3. 发送消息
-    send_timetable(access_token, message)
+    # 1. 发送消息
+    send_timetable(message)
 
 
 if __name__ == '__main__':
